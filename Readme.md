@@ -1,4 +1,4 @@
-This app details the construction of the theoretical density functions for the Poisson, Gamma, Compound Poisson and conditional event distribution given a realised value from the compound Poisson distribution. The compound Poisson variable sums up a random number of continuous iid Gamma random variables. The number of Gamma variables is sampled independently from a Poisson distribution.
+This R-shiny app details the construction of the theoretical density functions for the Poisson, Gamma, Compound Poisson and conditional event distribution given a realised value from the compound Poisson distribution. The compound Poisson variable sums up a random number of continuous iid Gamma random variables. The number of Gamma variables is sampled independently from a Poisson distribution.
 
 Furthermore to the theory, one may simulate and examine the numerical summaries from these theoretical distrubtions by clickling on the tabs. These may be compared back to the theoretical densities.
 
