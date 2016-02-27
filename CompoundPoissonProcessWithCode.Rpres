@@ -1,0 +1,194 @@
+Gamma Compound Poisson Variables
+========================================================
+author: Douglas McLean
+date: 27th February 2016
+
+Definition
+========================================================
+
+A compound Poisson `CP` variable $Y=\sum_{i=1}^N X_i$ combines
+
+- a discrete Poisson variable $N$ with rate $\lambda$ and
+- several iid variables $X_i$ from any continuous distribution
+
+The $N$ continuous variables $X_i$ are up to the user but are given [gamma distributions](https://en.wikipedia.org/wiki/Gamma_distribution) with rate $k$ and scale $\theta$ parameters
+
+The uses of the `CP` are numerous and extend known variables, e.g. Gamma, to _extreme value_ disributions capable of modelling the impact of unknown numbers of events such as weather, financial loses and the gross impact of catastrophes over time
+
+
+Density and Distributions
+========================================================
+The [law of total probability](https://en.wikipedia.org/wiki/Law_of_total_probability) expresses the density $f_Y$ in terms of its conditional densities $f_{Y|N}$ and the [Poisson density](https://en.wikipedia.org/wiki/Poisson_distribution) $f_N$
+\[
+f_Y(y|k,\theta,\lambda) = \sum_{n=0}^\infty f_{Y|N}(y|n,k,\theta)f_N(n|\lambda)
+\]
+When $N$ is zero $f_{Y|N}$ is the [Dirac delta function](https://en.wikipedia.org/wiki/Dirac_delta_function) $\delta(y)$
+
+When $N>0$ the variable $Y|N$ has a gamma distribution with updated shape $Nk$ and the same scale $\theta$ parameters
+```{r,echo=FALSE}
+alpha  <- 0.01
+lambda <- 1
+k      <- 5
+theta  <- 1
+Ntrunc <- 25
+Nrep   <- 100
+```
+In practice, the infinite series needs to be cut short after enough terms corresponding to the $100(1-\alpha)=`r 100*(1-alpha)`$%-ile. Here it is simply cut short at $N_{\mathrm{trunc}}=`r Ntrunc`$
+
+
+
+R-Shiny App
+========================================================
+
+The purpose of the `R`-Shiny App is to allow the user to vary the Poisson rate parameter $\lambda$ and the gamma shape $k$ and scale $\theta$ parameters to see their effect theoretcially and by simulation on
+
+- the Poisson density $f_N$
+- the Gamma density $f_X$
+- the compound Poisson density $f_Y$
+- the conditional event distribution $f_{N|Y}$
+
+With $0 < X_1,...,X_N,Y < \infty$ in the App the user varies the parameters from their defaults:
+\(
+\lambda=`r lambda`,\ k=`r k`,\ \theta=`r theta`,\ N_{\mathrm{trunc}}=`r Ntrunc`,\ N_{\mathrm{rep}}=`r Nrep`
+\)
+
+
+
+Output
+========================================================
+The R-Shiny App produces theoretical and simulated distributions for the Poisson $N$, Gamma $X_i$, Compound Poisson $Y$ and conditional event distribution $N|Y$. For the variable $Y$:
+```{r,echo=FALSE,fig.width=12}
+set.seed(123)
+
+input <- c()
+input$Event_Range <- c(0,10)
+input$Range <- c(0,30)
+input$lambda <- 1
+input$k <- 5
+input$theta <- 1
+input$y <- 10
+input$ntrunc <- 25
+input$n <- Nrep
+input$dist <- "cp"
+
+#source("CompoundPoissonFunctions.R")
+
+# Density function
+dcp <- function(y,k,theta,lambda,ntrunc=25){
+  if( any(y<0)  ) return(NA)
+  if( all(y>=0) ){
+    f <- rep(0,length(y))
+    for( n in 1:ntrunc ){
+      f <- f + dgamma(x=y,shape=n*k,scale=theta) * dpois(x=n,lambda=lambda)
+    }
+    f[y==0] <- 1e6 #Inf
+    return(f)
+  }
+  return(NULL)
+}
+
+# Random number generation from compound Poisson variable
+rcp <- function(n,lambda,k,theta,...){
+  
+  N <- rpois(n=n, lambda=lambda)
+  
+  K <- matrix(rgamma(n=n*max(N),shape=k,scale=theta),ncol=max(N))
+  K <- cbind(0,K)
+  M <- matrix(rep(1,n*(1+max(N))),ncol=1+max(N))
+  M[col(M)>N+1] <- 0
+  y <- apply(K*M,1,sum)
+  
+  return( y )
+}
+
+# Density function for the conditional Poisson event given a CP value y 
+dce <- function(n,y,k,theta,lambda,ntrunc=25){
+  if( y==0 ){
+    return( c(1,rep(0,length(n)-1)) )
+  } else {
+    N <- 1:ntrunc
+    f <- dgamma(x=y,shape=N*k,scale=theta) * dpois(x=N,lambda=lambda)
+    f <- f/sum(f)
+    return( c(0,f)[1+n] )
+  }
+}
+
+# Random number generation from conditional Poisson event given a CP value y
+rce <- function(n,y,k,theta,lambda,ntrunc=25){
+  if( y==0 ){
+    return( rep(0,n) )
+  } else {
+    N <- 1:ntrunc
+    f <- dgamma(x=y,shape=N*k,scale=theta) * dpois(x=N,lambda=lambda)
+    f <- cumsum(f)/sum(f)
+    u <- matrix(runif(n),ncol=1)
+    return( apply(u,1,function(x)1+sum(x>f)) )
+  }
+}
+
+
+n <- input$n
+
+y <- switch(input$dist,
+                pois  = seq(from=input$Event_Range[1],to=input$Event_Range[2],by=1),
+                gamma = seq(from=input$Range[1],to=input$Range[2],by=1/input$n),
+                cp    = seq(from=input$Range[1],to=input$Range[2],by=1/input$n),
+                ce    = seq(from=input$Event_Range[1],to=input$Event_Range[2],by=1),
+                seq(from=input$Event_Range[1],to=input$Event_Range[2],by=1))
+
+Density <- switch(input$dist,
+                      pois  = dpois(x=y, lambda=input$lambda),
+                      gamma = dgamma(x=y, shape=input$k, scale=input$theta),
+                      cp    = dcp(y=y, k=input$k, theta=input$theta, lambda=input$lambda,
+                                  ntrunc=input$ntrunc),
+                      ce    = dce(n=y, y=input$y, k=input$k, theta=input$theta, lambda=input$lambda,
+                                  ntrunc=input$ntrunc),
+                      dpois(x=y,lambda=input$lambda))
+
+Simulations <- switch(input$dist,
+                      pois  = rpois( n=n, lambda=input$lambda),
+                      gamma = rgamma(n=n, shape=input$k, scale=input$theta),
+                      cp    = rcp(   n=n, k=input$k, theta=input$theta, lambda=input$lambda, 
+                                     ntrunc=input$ntrunc),
+                      ce    = rce(   n=n, y=input$y, k=input$k, theta=input$theta, lambda=input$lambda, 
+                                     ntrunc=input$ntrunc))
+
+# Two plots side-by-side of CP process
+par(mfrow=c(1,2))
+
+
+# 1. Theoretical density
+n1 <- input$Event_Range[1]
+n2 <- input$Event_Range[2]
+    
+max.datum <- max(Density[y>0])
+    
+switch(input$dist,
+           pois  = barplot(Density, names.arg=n1:n2, xlab="n",        main="Theoretical Unconditional N"),
+           gamma = plot(y, Density, type="l", lwd=2, col="red",       xlab="y", main="Theoretical Gamma Density"),
+           cp    = plot(y, Density, type="l", lwd=2, col="darkgreen", xlab="y", 
+                        main="Theoretical Compound Poisson Density", ylim=c(0,max.datum)),
+           ce    = barplot(Density, names.arg=n1:n2, xlab="n",        
+                           main=paste("(Theoretical) Conditional on Y=",input$y,sep="")))
+
+    
+# 2. Simulated Density
+switch(input$dist,
+           pois  = barplot(summary(as.factor(Simulations)), 
+                           names.arg=names(summary(Simulations)), 
+                           xlab="n", main="Simulated Unconditional N"),
+           gamma = hist(Simulations, main="Simulated Gamma Density",   col="red"),
+           cp    = hist(Simulations, main="Simulated Compound Poisson Density",  col="darkgreen"),
+           ce    = barplot(summary(as.factor(Simulations)), 
+                           names.arg=names(summary(as.factor(Simulations))), 
+                           xlab="n", main=paste("(Simulated) Conditional on Y=",input$y,sep="")))
+```
+
+
+
+
+
+
+
+
+
